@@ -2,12 +2,15 @@ from flask import Flask, request, make_response
 import json
 import platform
 import sys
+import hmac
+import hashlib
 from .version import __version__
 
 
 class SlackServer(Flask):
-    def __init__(self, verification_token, endpoint, emitter, server):
+    def __init__(self, verification_token, endpoint, emitter, server, secret):
         self.verification_token = verification_token
+        self.secret = secret
         self.emitter = emitter
         self.endpoint = endpoint
         self.package_info = self.get_package_info()
@@ -41,6 +44,10 @@ class SlackServer(Flask):
 
         return " ".join(ua_string)
 
+    def verify_signature(self, timestamp, signature):
+        new_hmac = hmac.new(self.secret, 'v0:' + timestamp + ':' + request.data, hashlib.sha256).hexdigest()
+        return hmac.compare_digest(signature.encode('utf-8'), 'v0=' + new_hmac)
+
     def bind_route(self, server):
         @server.route(self.endpoint, methods=['GET', 'POST'])
         def event():
@@ -62,6 +69,14 @@ class SlackServer(Flask):
             if self.verification_token != request_token:
                 self.emitter.emit('error', 'invalid verification token')
                 return make_response("Request contains invalid Slack verification token", 403)
+
+            # Verify the signature if secret is passed
+            if self.secret:
+                timestamp = request.headers.get('X-Slack-Request-Timestamp')
+                signature = request.headers.get('X-Slack-Signature')
+                if not self.verify_signature(timestamp, signature):
+                    self.emitter.emit('error', 'signature not verified')
+                    return make_response("Request contains a signature that does not match", 403)
 
             # Parse the Event payload and emit the event to the event listener
             if "event" in event_data:

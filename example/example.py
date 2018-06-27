@@ -4,7 +4,8 @@ import os
 
 # Our app's Slack Event Adapter for receiving actions via the Events API
 SLACK_VERIFICATION_TOKEN = os.environ["SLACK_VERIFICATION_TOKEN"]
-slack_events_adapter = SlackEventAdapter(SLACK_VERIFICATION_TOKEN, "/slack/events")
+SLACK_SIGNING_SECRET = os.getenv('SLACK_SIGNING_SECRET', None)
+slack_events_adapter = SlackEventAdapter(SLACK_VERIFICATION_TOKEN, "/slack/events", secret=SLACK_SIGNING_SECRET)
 
 # Create a SlackClient for your bot to use for Web API requests
 SLACK_BOT_TOKEN = os.environ["SLACK_BOT_TOKEN"]
